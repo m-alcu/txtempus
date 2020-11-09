@@ -171,26 +171,15 @@ static uint64_t parity(uint64_t d, uint8_t from, uint8_t to_including) {
 
 void GetPlainFromMeteo(uint8_t* result, uint32_t meteo)
 {
-    //byte[] result = new byte[5];
     meteo <<= 4;
     result[1] = 0x50;            
     result[2] = (uint8_t)((meteo & 0xF0) | 0x02);
-    //Console.WriteLine("meteo to 2 0x{0:X}", meteo);
-    //Console.WriteLine("result 2 0x{0:X}", result[2]);
     meteo >>= 8;
     result[3] = (uint8_t)(meteo & 0xFF);
-    //Console.WriteLine("meteo to 3 0x{0:X} ", meteo);
-    //Console.WriteLine("result 3 0x{0:X}", result[3]);
     meteo >>= 8;
     result[4] = (uint8_t)(meteo & 0xFF);
-    //Console.WriteLine("meteo to 4 0x{0:X} ", meteo);
-    //Console.WriteLine("result 4 0x{0:X}", result[4]);
-    //Hay un error en el montaje del plain text para ponerle el checksum 0x2501
     meteo >>= 8;
-    result[0] = (uint8_t)(meteo & 0x0F | 0x10);
-    //Console.WriteLine("meteo to 0 x{0:X} ", meteo);
-    //Console.WriteLine("result 0 0x{0:X}", result[0]);            
-    //return result;
+    result[0] = (uint8_t)((meteo & 0x0F) | 0x10);
 }
 
 void CopyTimeToByteUint(uint8_t* data, uint8_t* key, DataContainer *container)
@@ -341,9 +330,6 @@ void ShiftTimeLeft(int round, DataContainer *container)
 void Encrypt(uint8_t* cipher, uint8_t* plain, uint8_t* key)
 {
     DataContainer container = {0,0,0,0,0,0};
-    //uint ulTemp;
-    //uiCnt, uiILCnt, , uiOL2Cnt, uiBitCnt
-    //byte ucOL2Pat, ucTemp;
 
     CopyTimeToByteUint(plain, key, &container);
 
@@ -381,21 +367,10 @@ void Encrypt(uint8_t* cipher, uint8_t* plain, uint8_t* key)
     cipher[3] = container.mByteUint3.Byte1;
     cipher[4] = container.mByteUint3.Byte2;
 
-    /*
-        R08090A.ulFull <<= 4;
-        R0B0C0D0E.byte.R0D |= (R08090A.byte.R08 & 0xF0);
-        pucCipher[0] = R0B0C0D0E.byte.R0B;
-        pucCipher[1] = R0B0C0D0E.byte.R0C;
-        pucCipher[2] = R0B0C0D0E.byte.R0D;
-        pucCipher[3] = R08090A.byte.R09;
-        pucCipher[4] = R08090A.byte.R0A;
-    */
 }
 
 void EncodeDataset(uint32_t plain, uint8_t* key, uint8_t* result)
 {
-    //byte[] result; // = new byte[10];
-    //CipherKeyContainer InOut = new CipherKeyContainer();
     CipherKeyContainer InOut;
 
     for (int i = 0; i < 5; i++)
@@ -439,7 +414,7 @@ void EncodeDataset(uint32_t plain, KeyPackage keyPackage, uint8_t* result)
         momentTemp = int_to_bcd(ucTemp2);
         for (uiCnt = 0; uiCnt < 8; uiCnt++)
         {
-            if ((( uiMoment != 3 | uiCnt <= 4 ) & ( uiMoment != 4 | uiCnt <= 2)) | (uiMoment != 3 & uiMoment != 4))
+            if ((( (uiMoment != 3) | (uiCnt <= 4) ) & ( (uiMoment != 4) | (uiCnt <= 2))) | ((uiMoment != 3) & (uiMoment != 4)))
             {
                 ucTemp = (uint8_t)(ucTemp >> 1);
                 if ((momentTemp & 1) == 1)
@@ -461,8 +436,6 @@ MeteoFrames GetMeteoFrames(uint8_t* dataCiperKey) {
     MeteoFrames meteoframes;
     uint16_t uiCntFrame;
 
-    // 0101111000.1010  1101.01101001.11  101001.10010011
-
     uiFrame = 0;
     uiCntFrame = 0;
     meteoframes.meteoFrame[0] = 0;
@@ -471,7 +444,7 @@ MeteoFrames GetMeteoFrames(uint8_t* dataCiperKey) {
     for (uiKey = 0; uiKey < 5; uiKey++) {
         tempKey = dataCiperKey[uiKey];
         for(uiCnt = 0; uiCnt < 8; uiCnt++) {
-            if (uiKey == 0 & (uiCnt == 0 | uiCnt == 6)) {
+            if ((uiKey == 0) & ((uiCnt == 0) | (uiCnt == 6))) {
                 meteoframes.meteoFrame[uiFrame] =(uint16_t)(meteoframes.meteoFrame[uiFrame] >> 1);    
                 uiCntFrame++;
             }             
@@ -494,28 +467,31 @@ MeteoFrames GetMeteoFrames(uint8_t* dataCiperKey) {
 
 uint16_t getFrame(uint32_t plain, KeyPackage keyPackage) {
 
-  uint8_t seccion = keyPackage.minute % 3;
-  keyPackage.minute = keyPackage.minute + 2 - seccion;  
+  uint8_t seccion = ( keyPackage.minute ) % 3;
+  keyPackage.minute = ( keyPackage.minute ) + 2 - seccion;  
 
   uint8_t keys[10];
   EncodeDataset(plain, keyPackage, keys);
   MeteoFrames meteoframes = GetMeteoFrames(keys);
-
   return meteoframes.meteoFrame[seccion];
 }
 
 void DCF77TimeSignalSource::PrepareMinute(time_t t) {
+
+  struct tm breakdown_last;
+  localtime_r(&t, &breakdown_last);
+
   t += 60;  // We're sending the _upcoming_ minute.
   struct tm breakdown;
   localtime_r(&t, &breakdown);
 
   KeyPackage keyPackage;
-  keyPackage.year = breakdown.tm_year;
-  keyPackage.dow = breakdown.tm_wday ? breakdown.tm_wday : 7;
-  keyPackage.month = breakdown.tm_mon;
-  keyPackage.day = breakdown.tm_mday;
-  keyPackage.hour = breakdown.tm_hour;
-  keyPackage.minute = breakdown.tm_min;
+  keyPackage.year = breakdown_last.tm_year % 100;
+  keyPackage.dow = breakdown_last.tm_wday ? breakdown_last.tm_wday : 7;
+  keyPackage.month = breakdown_last.tm_mon+1;
+  keyPackage.day = breakdown_last.tm_mday;
+  keyPackage.hour = breakdown_last.tm_hour;
+  keyPackage.minute = breakdown_last.tm_min;
   uint16_t frame = getFrame(6512678, keyPackage);
 
   // https://de.wikipedia.org/wiki/DCF77
